@@ -1,59 +1,51 @@
-using FoodServiceApp.Maui.Models;
+using FoodServiceApp.Maui.Services;
 
 namespace FoodServiceApp.Maui.Views;
 
 public partial class AdminVendorListPage : ContentPage
 {
-    public AdminVendorListPage()
-    {
-        InitializeComponent();
-    }
+    private readonly VendorRegistrationApiClient _api = new();
 
-    protected override void OnAppearing()
+    public AdminVendorListPage() => InitializeComponent();
+
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
-        NapDanhSach();
+        await NapDanhSachAsync();
     }
 
-    private void NapDanhSach()
+    private async Task NapDanhSachAsync()
     {
-        // TODO: thay bằng GET /api/quan-tri/gian-hang khi có API thật.
-        var danhSach = MockData.DanhSachGianHang
-            .Where(g => g.TrangThaiDangKy == TrangThaiDangKyGianHang.DaDuyet)
-            .OrderByDescending(g => g.NgayDangKy)
-            .ToList();
-
-        DsGianHang.ItemsSource = danhSach;
+        try
+        {
+            DsGianHang.ItemsSource = await _api.GetApprovedAsync();
+        }
+        catch (Exception ex)
+        {
+            DsGianHang.ItemsSource = null;
+            await DisplayAlert("Không tải được dữ liệu", $"Không thể kết nối Web API.\n\n{ex.Message}", "OK");
+        }
     }
 
     private async void OnKhoaMoClicked(object sender, EventArgs e)
     {
-        if (sender is not Button { CommandParameter: GianHang gh }) return;
+        if (sender is not Button { CommandParameter: AdminVendorDto vendor }) return;
 
-        if (gh.TaiKhoanBiKhoa)
+        var action = vendor.TaiKhoanHoatDong ? "khóa" : "mở khóa";
+        if (!await DisplayAlert("Xác nhận", $"Bạn muốn {action} tài khoản \"{vendor.TenCuaHang}\"?", "Đồng ý", "Hủy")) return;
+
+        if (!await _api.ToggleLockAsync(vendor.MaGianHang))
         {
-            gh.TaiKhoanBiKhoa = false;
-            // TODO: gọi PUT /api/quan-tri/gian-hang/{id}/mo-khoa khi có API thật.
-            NapDanhSach();
-            await DisplayAlert("Đã mở khóa", $"Tài khoản gian hàng \"{gh.TenGianHang}\" đã được kích hoạt lại.", "OK");
+            await DisplayAlert("Không thành công", "Server không thể cập nhật tài khoản.", "OK");
             return;
         }
 
-        bool xacNhan = await DisplayAlert(
-            "Khóa tài khoản gian hàng",
-            $"Khóa tài khoản \"{gh.TenGianHang}\"? Gian hàng sẽ không thể đăng nhập hoặc nhận đơn mới cho đến khi được mở lại.",
-            "Khóa", "Hủy");
-        if (!xacNhan) return;
-
-        gh.TaiKhoanBiKhoa = true;
-        // TODO: gọi PUT /api/quan-tri/gian-hang/{id}/khoa khi có API thật (kèm lý do khóa).
-
-        NapDanhSach();
+        await NapDanhSachAsync();
     }
 
-    private void OnRefreshing(object? sender, EventArgs e)
+    private async void OnRefreshing(object? sender, EventArgs e)
     {
-        NapDanhSach();
-        RefreshDsGianHang.IsRefreshing = false;
+        try { await NapDanhSachAsync(); }
+        finally { RefreshDsGianHang.IsRefreshing = false; }
     }
 }
