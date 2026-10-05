@@ -1,60 +1,63 @@
-using FoodServiceApp.Maui.Models;
+using FoodServiceApp.Maui.Services;
 
 namespace FoodServiceApp.Maui.Views;
 
 public partial class AdminVendorApprovalPage : ContentPage
 {
-    public AdminVendorApprovalPage()
-    {
-        InitializeComponent();
-    }
+    private readonly VendorRegistrationApiClient _api = new();
 
-    protected override void OnAppearing()
+    public AdminVendorApprovalPage() => InitializeComponent();
+
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
-        NapDanhSach();
+        await NapDanhSachAsync();
     }
 
-    private void NapDanhSach()
+    private async Task NapDanhSachAsync()
     {
-        // TODO: thay bằng GET /api/quan-tri/gian-hang?trangThaiDangKy=ChoDuyet khi có API thật.
-        var choDuyet = MockData.DanhSachGianHang
-            .Where(g => g.TrangThaiDangKy == TrangThaiDangKyGianHang.ChoDuyet)
-            .OrderBy(g => g.NgayDangKy)
-            .ToList();
-
-        DsChoDuyet.ItemsSource = choDuyet;
-        LblRong.IsVisible = choDuyet.Count == 0;
+        try
+        {
+            var data = await _api.GetPendingAsync();
+            DsChoDuyet.ItemsSource = data;
+            LblRong.IsVisible = data.Count == 0;
+        }
+        catch (Exception ex)
+        {
+            DsChoDuyet.ItemsSource = null;
+            LblRong.IsVisible = true;
+            await DisplayAlert("Không tải được dữ liệu", $"Không thể kết nối Web API.\n\n{ex.Message}", "OK");
+        }
     }
 
     private async void OnDuyetClicked(object sender, EventArgs e)
     {
-        if (sender is not Button { CommandParameter: GianHang gh }) return;
-
-        gh.TrangThaiDangKy = TrangThaiDangKyGianHang.DaDuyet;
-        gh.DangMoCua = true;
-        // TODO: gọi PUT /api/quan-tri/gian-hang/{id}/duyet khi có API thật (kèm gửi email thông báo).
-
-        NapDanhSach();
-        await DisplayAlert("Đã duyệt", $"Gian hàng \"{gh.TenGianHang}\" đã được kích hoạt trên nền tảng.", "OK");
+        if (sender is not Button { CommandParameter: AdminVendorDto vendor }) return;
+        if (!await DisplayAlert("Duyệt hồ sơ", $"Duyệt gian hàng \"{vendor.TenCuaHang}\"?", "Duyệt", "Để sau")) return;
+        if (!await _api.ApproveAsync(vendor.MaGianHang))
+        {
+            await DisplayAlert("Không thành công", "Server không thể duyệt hồ sơ này.", "OK");
+            return;
+        }
+        await NapDanhSachAsync();
+        await DisplayAlert("Đã duyệt", $"Gian hàng \"{vendor.TenCuaHang}\" đã được duyệt.", "OK");
     }
 
     private async void OnTuChoiClicked(object sender, EventArgs e)
     {
-        if (sender is not Button { CommandParameter: GianHang gh }) return;
-
-        bool xacNhan = await DisplayAlert("Từ chối hồ sơ", $"Từ chối hồ sơ đăng ký của \"{gh.TenGianHang}\"?", "Từ chối", "Để sau");
-        if (!xacNhan) return;
-
-        gh.TrangThaiDangKy = TrangThaiDangKyGianHang.TuChoi;
-        // TODO: gọi PUT /api/quan-tri/gian-hang/{id}/tu-choi khi có API thật (kèm gửi email lý do).
-
-        NapDanhSach();
+        if (sender is not Button { CommandParameter: AdminVendorDto vendor }) return;
+        if (!await DisplayAlert("Từ chối hồ sơ", $"Từ chối \"{vendor.TenCuaHang}\"?", "Từ chối", "Để sau")) return;
+        if (!await _api.RejectAsync(vendor.MaGianHang))
+        {
+            await DisplayAlert("Không thành công", "Server không thể từ chối hồ sơ này.", "OK");
+            return;
+        }
+        await NapDanhSachAsync();
     }
 
-    private void OnRefreshing(object? sender, EventArgs e)
+    private async void OnRefreshing(object? sender, EventArgs e)
     {
-        NapDanhSach();
-        RefreshDsChoDuyet.IsRefreshing = false;
+        try { await NapDanhSachAsync(); }
+        finally { RefreshDsChoDuyet.IsRefreshing = false; }
     }
 }
