@@ -24,6 +24,11 @@ namespace FoodServiceApp.Web.Models.Dtos
 
     public record VendorListItemDto(int MaGianHang, string TenCuaHang, string DiaChi, DateTime NgayDangKy, string TrangThaiKinhDoanh, bool TaiKhoanHoatDong);
 
+    public record AdminVendorDto(
+        int MaGianHang, int MaTK, string TenCuaHang, string DiaChi, string SDT,
+        string Email, string? MoTa, string? HinhAnh, DateTime NgayDangKy,
+        string TrangThaiDuyet, string TrangThaiKinhDoanh, bool TaiKhoanHoatDong);
+
     public record CustomerListItemDto(int MaKH, string HoTen, string SDT, string? Email, bool TaiKhoanHoatDong);
 
     public record DriverHomeDto(
